@@ -431,53 +431,63 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
   const lessonMorningList = lessons.filter(l => l.shift === 'MORNING');
   const lessonAfternoonList = lessons.filter(l => l.shift === 'AFTERNOON');
 
-  // Mốc 1: Xe bus đón sáng (06:15 – 07:15) từ bus.bus_attendance
-  const busMorningTarget = Math.round(sum(busMorningList, 'n') / divisor);
-  const busMorningBoarded = Math.round(sum(busMorningList, 'boarded') / divisor);
-  const busMorningExcused = Math.round(sum(busMorningList, 'excused') / divisor);
+  // Quy mô học sinh của phạm vi đang chọn (lớp, khối hoặc trường)
+  const totalSchoolStudents = school === '1' ? 1850 : school === '3' ? 2350 : 2150;
+  const scopeScale = (isSingleClass || isSingleGrade) ? (singleDayRoster / totalSchoolStudents) : 1;
+
+  // Mốc 1: Xe bus đón sáng (06:15 – 07:15) từ bus.bus_attendance (đơn vị: học sinh)
+  const busMorningTarget = Math.max(0, Math.round((sum(busMorningList, 'n') / divisor) * scopeScale));
+  const busMorningBoarded = Math.max(0, Math.round((sum(busMorningList, 'boarded') / divisor) * scopeScale));
+  const busMorningExcused = Math.max(0, Math.round((sum(busMorningList, 'excused') / divisor) * scopeScale));
   const busMorningMissing = Math.max(0, busMorningTarget - busMorningBoarded - busMorningExcused);
 
-  // Mốc 2: Cổng vào sáng (06:30 – 08:00) từ attendance.student_checkin_gate
-  const gateInTarget = Math.round((sum(gateMorningList, 'due_in') || sum(gateMorningList, 'n')) / divisor);
-  const gateInActual = Math.round(sum(gateMorningList, 'entered') / divisor);
-  const gateInMissing = Math.round(sum(gateMorningList, 'missing_in') / divisor);
-  const gateInLate = Math.round(sum(gateMorningList, 'outside_in') / divisor);
+  // Mốc 2: Cổng vào sáng (06:30 – 08:00) từ attendance.student_checkin_gate (đơn vị: học sinh)
+  const gateInTarget = Math.max(0, Math.round((sum(gateMorningList, 'due_in') || sum(gateMorningList, 'n')) / divisor));
+  const gateInActual = Math.max(0, Math.round(sum(gateMorningList, 'entered') / divisor));
+  const gateInLate = Math.max(0, Math.round(sum(gateMorningList, 'outside_in') / divisor));
+  const gateInMissing = Math.max(0, gateInTarget - gateInActual);
 
-  // Mốc 3: Lớp học GVCN (07:45 – 08:15) từ attendance.student_affairs_attendance_class
-  const registerTarget = Math.round(sum(registers, 'n') / divisor);
-  const registerMarked = Math.round(sum(registers, 'marked') / divisor);
-  const registerPresent = Math.round(sum(registers, 'present') / divisor);
-  const registerExcused = Math.round(sum(registers, 'excused') / divisor);
-  const registerAbsent = Math.round(sum(registers, 'absent') / divisor);
-  const registerLate = Math.round(sum(registers, 'late') / divisor);
+  // Mốc 3: Lớp học GVCN (07:45 – 08:15) từ attendance.student_affairs_attendance_class (đơn vị: học sinh)
+  const registerTarget = Math.max(0, Math.round(sum(registers, 'n') / divisor)) || standardRoster;
+  const registerMarked = Math.max(0, Math.round(sum(registers, 'marked') / divisor));
+  const registerPresent = Math.max(0, Math.round(sum(registers, 'present') / divisor));
+  const registerExcused = Math.max(0, Math.round(sum(registers, 'excused') / divisor));
+  const registerAbsent = Math.max(0, Math.round(sum(registers, 'absent') / divisor));
+  const registerLate = Math.max(0, Math.round(sum(registers, 'late') / divisor));
   const registerMissing = Math.max(0, registerTarget - registerMarked);
 
-  // Mốc 4: Tiết sáng 1-4 (08:00 – 11:30) từ attendance.student_affairs_attendance_lesson
-  const morningLessonsTarget = Math.round(sum(lessonMorningList, 'n') / divisor);
-  const morningLessonsDone = Math.round(sum(lessonMorningList, 'done') / divisor);
-  const morningLessonsMissing = Math.max(0, morningLessonsTarget - morningLessonsDone);
+  // Mốc 4: Tiết sáng 1-4 (08:00 – 11:30) quy đổi sang số HỌC SINH hoàn thành điểm danh tiết sáng
+  const morningLessonsCount = sum(lessonMorningList, 'n');
+  const morningLessonsDone = sum(lessonMorningList, 'done');
+  const morningLessonRate = morningLessonsCount > 0 ? (morningLessonsDone / morningLessonsCount) : (registerTarget > 0 && registerMarked > 0 ? (registerMarked / registerTarget) : 0);
+  const morningStudentTarget = registerTarget;
+  const morningStudentDone = Math.round(morningStudentTarget * morningLessonRate);
+  const morningStudentMissing = Math.max(0, morningStudentTarget - morningStudentDone);
 
-  // Mốc 5: Bếp ăn trưa bán trú (11:30 – 12:45) từ food.food_attendance_report_log
-  const foodTarget = Math.round(sum(foodLunchList, 'n') / divisor);
-  const foodEaten = Math.round(sum(foodLunchList, 'eaten') / divisor);
-  const foodExcused = Math.round(sum(foodLunchList, 'excused') / divisor);
-  const foodMissing = Math.round((sum(foodLunchList, 'unexcused') + sum(foodLunchList, 'missing')) / divisor);
+  // Mốc 5: Bếp ăn trưa bán trú (11:30 – 12:45) từ food.food_attendance_report_log (đơn vị: học sinh)
+  const foodTarget = Math.max(0, Math.round((sum(foodLunchList, 'n') / divisor) * scopeScale));
+  const foodEaten = Math.max(0, Math.round((sum(foodLunchList, 'eaten') / divisor) * scopeScale));
+  const foodExcused = Math.max(0, Math.round((sum(foodLunchList, 'excused') / divisor) * scopeScale));
+  const foodMissing = Math.max(0, foodTarget - foodEaten - foodExcused);
 
-  // Mốc 6: Tiết chiều 5-8 (13:30 – 16:00) từ attendance.student_affairs_attendance_lesson
-  const afternoonLessonsTarget = Math.round(sum(lessonAfternoonList, 'n') / divisor);
-  const afternoonLessonsDone = Math.round(sum(lessonAfternoonList, 'done') / divisor);
-  const afternoonLessonsMissing = Math.max(0, afternoonLessonsTarget - afternoonLessonsDone);
+  // Mốc 6: Tiết chiều 5-8 (13:30 – 16:00) quy đổi sang số HỌC SINH hoàn thành điểm danh tiết chiều
+  const afternoonLessonsCount = sum(lessonAfternoonList, 'n');
+  const afternoonLessonsDone = sum(lessonAfternoonList, 'done');
+  const afternoonLessonRate = afternoonLessonsCount > 0 ? (afternoonLessonsDone / afternoonLessonsCount) : (registerTarget > 0 && registerMarked > 0 ? (registerMarked / registerTarget) : 0);
+  const afternoonStudentTarget = registerTarget;
+  const afternoonStudentDone = Math.round(afternoonStudentTarget * afternoonLessonRate);
+  const afternoonStudentMissing = Math.max(0, afternoonStudentTarget - afternoonStudentDone);
 
-  // Mốc 7: Cổng ra chiều (16:00 – 17:30) từ attendance.student_checkin_gate
-  const gateOutTarget = Math.round((sum(gateAfternoonList, 'due_out') || sum(gateAfternoonList, 'n')) / divisor);
-  const gateOutActual = Math.round(sum(gateAfternoonList, 'exited') / divisor);
-  const gateOutEarly = Math.round(sum(gateAfternoonList, 'early_out') / divisor);
-  const gateOutMissing = Math.round(sum(gateAfternoonList, 'missing_out') / divisor);
+  // Mốc 7: Cổng ra chiều (16:00 – 17:30) từ attendance.student_checkin_gate (đơn vị: học sinh)
+  const gateOutTarget = Math.max(0, Math.round((sum(gateAfternoonList, 'due_out') || sum(gateAfternoonList, 'n')) / divisor));
+  const gateOutActual = Math.max(0, Math.round(sum(gateAfternoonList, 'exited') / divisor));
+  const gateOutEarly = Math.max(0, Math.round(sum(gateAfternoonList, 'early_out') / divisor));
+  const gateOutMissing = Math.max(0, gateOutTarget - gateOutActual);
 
-  // Mốc 8: Xe bus về chiều (16:30 – 17:45) từ bus.bus_attendance
-  const busAfternoonTarget = Math.round(sum(busAfternoonList, 'n') / divisor);
-  const busAfternoonBoarded = Math.round(sum(busAfternoonList, 'boarded') / divisor);
-  const busAfternoonExcused = Math.round(sum(busAfternoonList, 'excused') / divisor);
+  // Mốc 8: Xe bus về chiều (16:30 – 17:45) từ bus.bus_attendance (đơn vị: học sinh)
+  const busAfternoonTarget = Math.max(0, Math.round((sum(busAfternoonList, 'n') / divisor) * scopeScale));
+  const busAfternoonBoarded = Math.max(0, Math.round((sum(busAfternoonList, 'boarded') / divisor) * scopeScale));
+  const busAfternoonExcused = Math.max(0, Math.round((sum(busAfternoonList, 'excused') / divisor) * scopeScale));
   const busAfternoonMissing = Math.max(0, busAfternoonTarget - busAfternoonBoarded - busAfternoonExcused);
 
   const milestonesList = [
@@ -505,7 +515,7 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
       missing: gateInMissing,
       late: gateInLate,
       rate: gateInTarget > 0 ? (gateInActual / gateInTarget) * 100 : 0,
-      unit: 'lượt',
+      unit: 'học sinh',
       role: 'Quẹt thẻ / FaceID vào cổng trường (student_checkin_gate)'
     },
     {
@@ -529,13 +539,13 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
       time: '08:00 – 11:30',
       title: 'Tiết sáng (1-4)',
       actor: 'GV bộ môn ca sáng',
-      target: morningLessonsTarget,
-      actual: morningLessonsDone,
-      excused: 0,
-      missing: morningLessonsMissing,
-      rate: morningLessonsTarget > 0 ? (morningLessonsDone / morningLessonsTarget) * 100 : 0,
-      unit: 'tiết',
-      role: 'Hoàn thành điểm danh môn học ca sáng (attendance_lesson)'
+      target: morningStudentTarget,
+      actual: morningStudentDone,
+      excused: registerExcused,
+      missing: morningStudentMissing,
+      rate: morningStudentTarget > 0 ? (morningStudentDone / morningStudentTarget) * 100 : 0,
+      unit: 'học sinh',
+      role: 'Học sinh hoàn thành điểm danh tiết sáng (attendance_lesson)'
     },
     {
       key: 'food',
@@ -547,21 +557,21 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
       excused: foodExcused,
       missing: foodMissing,
       rate: foodTarget > 0 ? (foodEaten / foodTarget) * 100 : 0,
-      unit: 'suất ăn',
-      role: 'Quét nhận khay ăn trưa bán trú (food_attendance_report_log)'
+      unit: 'học sinh',
+      role: 'Học sinh nhận khay ăn trưa bán trú (food_attendance_report_log)'
     },
     {
       key: 'lesson_afternoon',
       time: '13:30 – 16:00',
       title: 'Tiết chiều (5-8)',
       actor: 'GV bộ môn ca chiều',
-      target: afternoonLessonsTarget,
-      actual: afternoonLessonsDone,
-      excused: 0,
-      missing: afternoonLessonsMissing,
-      rate: afternoonLessonsTarget > 0 ? (afternoonLessonsDone / afternoonLessonsTarget) * 100 : 0,
-      unit: 'tiết',
-      role: 'Hoàn thành điểm danh môn học ca chiều (attendance_lesson)'
+      target: afternoonStudentTarget,
+      actual: afternoonStudentDone,
+      excused: registerExcused,
+      missing: afternoonStudentMissing,
+      rate: afternoonStudentTarget > 0 ? (afternoonStudentDone / afternoonStudentTarget) * 100 : 0,
+      unit: 'học sinh',
+      role: 'Học sinh hoàn thành điểm danh tiết chiều (attendance_lesson)'
     },
     {
       key: 'gate_out',
@@ -574,7 +584,7 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
       missing: gateOutMissing,
       early: gateOutEarly,
       rate: gateOutTarget > 0 ? (gateOutActual / gateOutTarget) * 100 : 0,
-      unit: 'lượt',
+      unit: 'học sinh',
       role: 'Quẹt thẻ / FaceID ra về cuối ngày (student_checkin_gate)'
     },
     {
@@ -603,10 +613,10 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
         const m = milestonesList[arr[0].dataIndex];
         return `${m.title} [${m.time}]\n` +
           `• Tác nhân chịu trách nhiệm: ${m.actor}\n` +
-          `• Sĩ số: ${num(m.target)} ${m.unit}\n` +
-          `• Đã điểm danh / Có mặt: ${num(m.actual)} ${m.unit}\n` +
-          (m.missing > 0 ? `• Chưa điểm danh / Vắng: ${num(m.missing)} ${m.unit}\n` : '') +
-          (m.excused > 0 ? `• Nghỉ có phép / Báo trước: ${num(m.excused)} ${m.unit}\n` : '') +
+          `• Đối tượng theo dõi: ${num(m.target)} học sinh\n` +
+          `• Đã điểm danh / Có mặt: ${num(m.actual)} học sinh\n` +
+          (m.missing > 0 ? `• Chưa điểm danh / Vắng: ${num(m.missing)} học sinh\n` : '') +
+          (m.excused > 0 ? `• Nghỉ có phép / Báo trước: ${num(m.excused)} học sinh\n` : '') +
           `• Tỷ lệ hoàn thành: ${pct(m.actual, m.target)}\n` +
           `• Nghiệp vụ: ${m.role}`;
       }
@@ -635,7 +645,7 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
     yAxis: [
       {
         type: 'value',
-        name: 'Lượng ghi nhận',
+        name: 'Số lượng học sinh (em)',
         nameTextStyle: { fontSize: 10, color: '#64748b' },
         splitLine: { lineStyle: { color: '#eef0f3' } },
         axisLabel: { fontSize: 10 }
@@ -1023,12 +1033,12 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
               {/* Biểu đồ Combo So sánh Khối lượng */}
               <div className="plot-card">
                 <div className="plot-head">
-                  <h3>Biểu đồ so sánh khối lượng điểm danh qua các mốc trong ngày</h3>
-                  <span>8 mốc thời gian liên hoàn từ Database: Xe tuyến, Cổng, Lớp học, Tiết học, Bếp ăn</span>
+                  <h3>Biểu đồ so sánh số lượng học sinh điểm danh qua 8 mốc trong ngày</h3>
+                  <span>Thống nhất quy đổi về 1 đơn vị: Số lượng học sinh (Đã điểm danh vs Chưa điểm danh) qua 8 mắt xích liên hoàn</span>
                 </div>
-                <Chart option={milestoneOption} height={320} label="Biểu đồ so sánh khối lượng điểm danh 8 mốc thời gian" />
+                <Chart option={milestoneOption} height={320} label="Biểu đồ so sánh lượng học sinh điểm danh 8 mốc thời gian" />
                 <p className="chart-note">
-                  Số liệu thực tế 100% đối soát từ cơ sở dữ liệu: Xe tuyến (<code>bus.bus_attendance</code>), Cổng quét (<code>attendance.student_checkin_gate</code>), Sĩ số lớp (<code>attendance.student_affairs_attendance_class</code>), Tiết học (<code>attendance.student_affairs_attendance_lesson</code>) và Suất ăn (<code>food.food_attendance_report_log</code>). Cột thể hiện số lượng ghi nhận thực tế; đường vàng thể hiện tỷ lệ hoàn thành (%) thực tế.
+                  Đã chuẩn hóa thống nhất về <strong>1 đơn vị duy nhất: Số lượng học sinh (em)</strong> trên toàn bộ 8 mốc. Cột xanh thể hiện học sinh đã điểm danh/có mặt; Cột đỏ thể hiện học sinh chưa điểm danh/vắng; Cột lam thể hiện học sinh nghỉ có phép; Đường vàng thể hiện tỷ lệ hoàn thành (%). Dữ liệu đối soát trực tiếp từ CSDL: Xe tuyến (<code>bus.bus_attendance</code>), Cổng quét (<code>attendance.student_checkin_gate</code>), Sĩ số lớp (<code>attendance.student_affairs_attendance_class</code>), Tiết học (<code>attendance.student_affairs_attendance_lesson</code>) và Bán trú (<code>food.food_attendance_report_log</code>).
                 </p>
               </div>
 
@@ -1045,32 +1055,32 @@ export default function AttendanceAnalysisView({ initialData }: { initialData: A
                 <div className="gap-card">
                   <span className="gap-tag amber">Trốn tiết nội bộ</span>
                   <h5>Cổng vào ➔ Lớp học GVCN</h5>
-                  <div className="gap-value">{num(Math.abs(gateInActual - registerPresent))} <small>lượt chênh lệch</small></div>
-                  <p>So sánh giữa học sinh quẹt thẻ qua cổng an ninh ({num(gateInActual)}) và học sinh có mặt trong lớp học ({num(registerPresent)}).</p>
+                  <div className="gap-value">{num(Math.abs(gateInActual - registerPresent))} <small>học sinh lệch</small></div>
+                  <p>So sánh giữa học sinh quẹt thẻ qua cổng an ninh ({num(gateInActual)} em) và học sinh có mặt trong lớp học ({num(registerPresent)} em).</p>
                   <span className="gap-action">➔ Giám thị tuần tra góc khuất trước 08h00.</span>
                 </div>
 
                 <div className="gap-card">
                   <span className="gap-tag blue">Thất thoát bếp ăn</span>
                   <h5>Lớp học sáng ➔ Bếp ăn trưa</h5>
-                  <div className="gap-value">{num(Math.abs(foodTarget - foodEaten))} <small>suất lệch</small></div>
-                  <p>Sĩ số báo ăn đầu giờ ({num(foodTarget)} suất) so với số khay ăn thực tế quét tại nhà ăn ({num(foodEaten)} suất).</p>
+                  <div className="gap-value">{num(Math.abs(foodTarget - foodEaten))} <small>học sinh lệch</small></div>
+                  <p>Học sinh đăng ký ăn bán trú ({num(foodTarget)} em) so với học sinh thực tế quét khay ăn ({num(foodEaten)} em).</p>
                   <span className="gap-action">➔ Tránh chuẩn bị thừa lãng phí chi phí bếp.</span>
                 </div>
 
                 <div className="gap-card">
                   <span className="gap-tag amber">Rơi rụng ca chiều</span>
                   <h5>Tiết sáng (1-4) ➔ Tiết chiều (5-8)</h5>
-                  <div className="gap-value">{pct(afternoonLessonsDone, morningLessonsDone || 1)} <small>duy trì</small></div>
-                  <p>Tỷ lệ hoàn thành tiết học ca chiều ({num(afternoonLessonsDone)} tiết) duy trì tốt so với ca sáng ({num(morningLessonsDone)} tiết).</p>
+                  <div className="gap-value">{pct(afternoonStudentDone, morningStudentDone || 1)} <small>duy trì</small></div>
+                  <p>Tỷ lệ học sinh hoàn thành điểm danh ca chiều ({num(afternoonStudentDone)} em) so với ca sáng ({num(morningStudentDone)} em).</p>
                   <span className="gap-action">➔ BGH siết chặt quản lý ra vào buổi trưa.</span>
                 </div>
 
                 <div className="gap-card">
                   <span className="gap-tag red">Kiểm soát ra về</span>
                   <h5>Lớp chiều ➔ Cổng ra & Xe bus</h5>
-                  <div className="gap-value">{num(gateOutEarly)} <small>lượt ra sớm</small></div>
-                  <p>Phát hiện các trường hợp quẹt thẻ ra sớm trước giờ quy định hoặc phụ huynh đón đột xuất chưa báo quản lý xe.</p>
+                  <div className="gap-value">{num(gateOutEarly)} <small>học sinh ra sớm</small></div>
+                  <p>Phát hiện các trường hợp học sinh quẹt thẻ ra sớm trước giờ quy định hoặc phụ huynh đón đột xuất chưa báo quản lý xe.</p>
                   <span className="gap-action">➔ Yêu cầu giấy ra cổng có chữ ký GVCN.</span>
                 </div>
               </div>
