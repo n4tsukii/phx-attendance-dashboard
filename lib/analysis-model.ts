@@ -1,7 +1,7 @@
 export type Dims = {schoolId:number;classId:number;date:string;shift:string;className:string;grade:string};
 export type Gate = Dims & {n:number;entered:number;exited:number;both:number;in_only:number;out_only:number;neither:number;due_in:number;due_out:number;missing_in:number;missing_out:number;unknown_window:number;outside_in:number;early_out:number;time_anomaly:number;future_time:number;duplicates:number};
 export type Register = Dims & {n:number;marked:number;no_log:number;present:number;excused:number;absent:number;late:number;cancelled:number;status:number|null;no_teacher:boolean;duplicate_register:number;duplicate_detail:number};
-export type Lesson = Dims & {n:number;done:number;processing:number;overdue:number;stuck_future:number;no_teacher:number;scanned:number;notified:number};
+export type Lesson = Dims & {n:number;done:number;processing:number;overdue:number;stuck_future:number;no_teacher:number;scanned:number;notified:number;present?:number;excused?:number;absent?:number;late?:number;lesson_count?:number};
 export type BusAttendance = Dims & {n:number;boarded:number;excused:number};
 export type FoodAttendance = Dims & {n:number;eaten:number;excused:number;unexcused:number;missing:number};
 export type EventGroup = {schoolId:number;classId:number;date:string;shift:string;phase:string;hour?:number;method?:string;n:number};
